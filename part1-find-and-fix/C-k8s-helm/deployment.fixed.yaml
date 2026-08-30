@@ -1,0 +1,46 @@
+# templates/deployment.yaml (fixed)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-notification-worker
+  labels:
+    app.kubernetes.io/name: notification-worker
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: notification-worker
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: notification-worker
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      containers:
+        - name: worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          securityContext:
+            privileged: false
+            runAsNonRoot: true
+            runAsUser: 10001
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-env
+            - secretRef:
+                name: {{ .Values.env.secretName | default "notification-worker-secrets" }}
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      # hostPath volume removed entirely — the image's built-in CA bundle is sufficient.
+      # If a custom CA is genuinely required, mount it from a ConfigMap/Secret instead
+      # of the node's filesystem.

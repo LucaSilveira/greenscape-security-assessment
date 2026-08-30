@@ -1,0 +1,50 @@
+name: PR Preview Deploy
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    environment: preview   # requires reviewer approval before secrets are exposed to this run
+    strategy:
+      matrix:
+        region: [us-east-1, us-west-2]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Build
+        run: |
+          npm ci
+          npm run build
+
+      - name: Comment PR title on build log
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: echo "Building preview for: $PR_TITLE"
+
+      # Residual risk (see findings.md D1): this step still runs the PR's own code with
+      # secrets present. The environment approval gate makes that a deliberate human
+      # decision instead of automatic, but it isn't an architectural boundary — the real
+      # fix is splitting build (untrusted, no secrets) from deploy (trusted, OIDC) into
+      # separate jobs/workflows.
+      - name: Deploy to preview env
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.PREVIEW_AWS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.PREVIEW_AWS_SECRET }}
+        run: ./scripts/deploy-preview.sh
+
+      - name: Notify Slack
+        uses: some-org/slack-notify@a1b2c3d4e5f60718293a4b5c6d7e8f9012345678   # pinned to a commit SHA, not @main
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Run region smoke test
+        run: ./scripts/smoke.sh --region ${{ matrix.region }}

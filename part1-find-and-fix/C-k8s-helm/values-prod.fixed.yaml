@@ -1,0 +1,17 @@
+# values-prod.yaml (fixed)
+image:
+  repository: 411.dkr.ecr.us-east-1.amazonaws.com/notification-worker
+  tag: "1.42.0"   # pinned; prefer an image digest (sha256:...) produced by CI
+
+env:
+  APP_DEBUG: "false"
+
+# Secrets are never inlined here. This Secret is created/rotated out-of-band by the
+# External Secrets Operator, sourced from AWS Secrets Manager (prod/notification-worker/*).
+envFrom:
+  - secretRef:
+      name: notification-worker-secrets
+
+service:
+  type: ClusterIP   # was LoadBalancer — this queue has no business being internet-facing
+  port: 6379
